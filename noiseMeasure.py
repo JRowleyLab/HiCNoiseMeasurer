@@ -1,4 +1,5 @@
 #!/usr/bin/env python
+
 import numpy as np
 import argparse
 import subprocess
@@ -7,7 +8,7 @@ import statsmodels
 from statsmodels import tsa
 from statsmodels.tsa import stattools
 import warnings
-warnings.filterwarnings("ignore")
+#warnings.filterwarnings("ignore")
 
 parser = argparse.ArgumentParser(description='Tool used to either downsample or upsample Hi-C reads\n\n')
 
@@ -31,7 +32,7 @@ mychr = str(args.chrom)
 startbin = 1000000
 endbin = 10000000
 
- 
+
 for r in range(0,len(myres)):
     
     res=float(myres[r]) 
@@ -40,6 +41,7 @@ for r in range(0,len(myres)):
     noiselist=[]
     intres=int(res)
     location=":".join([str(mychr),str(int(startbin)),str(int(endbin))])
+    print(location)
     startoffset = int(startbin/res)
 
     for interactionfile in myfiles:
@@ -53,10 +55,16 @@ for r in range(0,len(myres)):
 
             if myE[0] == "WARN":
                 continue
+            if myE[0] == "WARNING:":
+                continue
             if myE[0] == "INFO":
                 continue
+            #if re.search(r'WARN', str(myE[0])):
+            #    continue
             expecteds.append(float(myE[0]))
+            
             #print("expecteds from juicer")
+        #print(expecteds[0:10])
         matsize=int((endbin-startbin)/intres+1)
         dense=np.zeros((matsize,matsize))
         with subprocess.Popen(['java', '-jar', args.juicertools, 'dump', 'observed', 'NONE', interactionfile, location, location, 'BP', str(intres)], stdout=subprocess.PIPE, stderr=subprocess.PIPE) as p:
@@ -69,19 +77,31 @@ for r in range(0,len(myres)):
                 continue
             if re[0] == "WARN":
                 continue
+            if re[0] == "WARNING:":
+                continue
+            #if re.search(r'WARN', str(myE[0])):
+            #    continue
 
-
-            left = math.floor(int(re[0])/res) - startoffset
+            try:
+                left = math.floor(int(re[0])/res) - startoffset
+            except ValueError:
+                print(re[0])
             right = math.floor(int(re[1])/res) - startoffset
 
             dist = int((int(re[1])-int(re[0]))/res)
             score = (float(re[2])+1)/(float(expecteds[dist])+1)
             dense[left,right] = score
             dense[right,left] = score
+        #print(dense[0:10,0:10])
         noise=[]
         for i in range(1,len(dense)):
             try:
-                noise.append(statsmodels.tsa.stattools.acf(dense[i-1:i,:], nlags=1)[1])
+                mylist = dense[i-1,:].tolist()
+
+                #noise.append(statsmodels.tsa.stattools.acf(dense[i-1:i,:], nlags=1)[1])
+                noise.append(statsmodels.tsa.stattools.acf(mylist,nlags=1)[1])
+                #print(statsmodels.tsa.stattools.acf(mylist,nlags=1))
+                #print(noise[-1])
             except:
                 continue
         noiselist.append(1/np.nanmean(noise))
